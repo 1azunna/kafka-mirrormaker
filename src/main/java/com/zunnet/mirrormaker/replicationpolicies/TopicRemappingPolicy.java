@@ -38,6 +38,15 @@ public class TopicRemappingPolicy extends DefaultReplicationPolicy {
 
     @Override
     public String formatRemoteTopic(String sourceClusterAlias, String topic) {
+        // Always replicate internal topics (e.g., starting with "__") or heartbeat topics
+        if (looksLikeHeartbeat(topic) || isMM2InternalTopic(topic) || isCheckpointsTopic(topic)) {
+            return super.formatRemoteTopic(sourceClusterAlias, topic); // Use default formatting for these topics
+        }
+
+        if (patternReplacements.isEmpty()) {
+            return topic;  // Default behavior: return the original topic name if replication.policy.topic-remapping.regex-patterns is not defined.
+        }
+
         for (PatternReplacement pr : patternReplacements) {
             Matcher matcher = pr.pattern.matcher(topic);
             if (matcher.matches()) {
@@ -46,7 +55,8 @@ public class TopicRemappingPolicy extends DefaultReplicationPolicy {
                 return newTopic;
             }
         }
-        return topic;
+        logger.info("Topic '{}' does not match any pattern and will not be replicated.", topic);
+        return null;
     }
 
     @Override
@@ -59,10 +69,6 @@ public class TopicRemappingPolicy extends DefaultReplicationPolicy {
         return null; // Default behavior, can be customized if needed
     }
 
-    @Override
-    public boolean isInternalTopic(String topic) {
-        return topic.endsWith(".internal") || topic.endsWith("-internal") || topic.matches("__[a-zA-Z]+.*") || topic.startsWith(".");
-    }
     private static class PatternReplacement {
         Pattern pattern;
         String replacement;
@@ -71,5 +77,9 @@ public class TopicRemappingPolicy extends DefaultReplicationPolicy {
             this.pattern = Pattern.compile(pattern);
             this.replacement = replacement;
         }
+    }
+
+    private boolean looksLikeHeartbeat(String topic) {
+        return topic != null && topic.endsWith(heartbeatsTopic());
     }
 }
