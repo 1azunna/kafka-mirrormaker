@@ -1,4 +1,4 @@
-name: 'jumia-kafka-mirrormaker-demo'
+name: 'kafka-mirrormaker-demo'
 
 services:
   kafka1:
