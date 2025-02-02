@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "kafka-mirrormaker.fullname" . }}-configmap
+  labels:
+    {{- include "kafka-mirrormaker.labels" . | nindent 4 }}
+data:
+  mirror-maker.properties: |+
+    # Kafka Connect
+    name = {{ .Values.kafka.name | default .Release.Name }}
+    clusters = source, target
+    source.group.id = {{ .Values.kafka.source.groupId | default (printf "%s-group" .Release.Name) }}
+    target.group.id = {{ .Values.kafka.target.groupId | default (printf "%s-group" .Release.Name) }}
+    offset.storage.topic = {{ .Values.kafka.offsetsTopic | default (printf "%s-offsets" .Release.Name) }}
+    config.storage.topic = {{ .Values.kafka.configTopic | default (printf "%s-configs" .Release.Name) }}
+    status.storage.topic = {{ .Values.kafka.statusTopic | default (printf "%s-status" .Release.Name) }}
+
+    # Bootstrap Servers
+    source.bootstrap.servers = {{ .Values.kafka.source.bootstrapServers }}
+    target.bootstrap.servers = {{ .Values.kafka.target.bootstrapServers }}
+
+    # Mirrors
+    source->target.enabled = true
+    target->source.enabled = {{ .Values.kafka.bidirectionalReplication }}
+    source->target.emit.heartbeats.enabled = true
+    source->target.emit.checkpoints.enabled = true
+    {{- if .Values.kafka.bidirectionalReplication }}
+    target->source.emit.heartbeats.enabled = true
+    target->source.emit.checkpoints.enabled = true
+    {{- end }}
+
+    {{- if and .Values.jmx.enabled }}
+    metrics.reporters = org.apache.kafka.common.metrics.JmxReporter
+    {{- end }}
+    
+    {{- range $key, $value := .Values.kafka.config }}
+    {{ $key }} = {{ $value }}
+    {{- end }}
+
+    # Replication Config
+    ## Topics and Group Filters
+    topics = {{ .Values.kafka.topicPatterns }}
+    groups = {{ .Values.kafka.groupPatterns }}
+    ## Kafka MirrorMaker Replication Policy Config
+    replication.policy.class = com.zunnet.mirrormaker.replicationpolicies.TopicRemappingPolicy
+    replication.policy.topic-remapping.regex-patterns = {{ .Values.kafka.topicRemappingPatterns }}
+
+    {{- range $key, $value := .Values.kafka.source.config }}
+    {{ printf "source.%s" $key }} = {{ $value }}
+    {{- end }}
+    
+    {{- range $key, $value := .Values.kafka.target.config }}
+    {{ printf "target.%s" $key }} = {{ $value }}
+    {{- end }}

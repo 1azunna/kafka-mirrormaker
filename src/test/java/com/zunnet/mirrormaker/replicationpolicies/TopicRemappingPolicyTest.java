@@ -51,6 +51,16 @@ public class TopicRemappingPolicyTest {
     }
 
     @Test
+    public void testOneToOneTopicMapping() {
+        props.put("replication.policy.topic-remapping.regex-patterns", "(.*):$1");
+        topicRemappingPolicy.configure(props);
+        String sourceTopic = "mytopic";
+        String expectedTargetTopic = "mytopic";
+        String actualTargetTopic = topicRemappingPolicy.formatRemoteTopic("source-cluster", sourceTopic);
+        assertEquals(expectedTargetTopic, actualTargetTopic);
+    }
+
+    @Test
     public void testNoRegexPatterns() {
         props.put("replication.policy.topic-remapping.regex-patterns", "");
         topicRemappingPolicy.configure(props);

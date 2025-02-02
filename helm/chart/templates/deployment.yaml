@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka-mirrormaker.fullname" . }}
+  labels:
+    {{- include "kafka-mirrormaker.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "kafka-mirrormaker.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "kafka-mirrormaker.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kafka-mirrormaker.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        {{- if .Values.jmx.enabled }}
+        - name: prometheus-jmx-exporter
+          image: "{{ .Values.prometheus.jmx.image }}:{{ .Values.prometheus.jmx.imageTag }}"
+          command:
+            - java
+            - -XX:MaxRAMPercentage=100
+            - -XshowSettings:vm
+            - -jar
+            - jmx_prometheus_httpserver.jar
+            - {{ .Values.prometheus.jmx.port | quote }}
+            - /etc/jmx-kafka-mm/jmx-kafka-mm-prometheus.yml
+          ports:
+            - containerPort: {{ .Values.prometheus.jmx.port }}
+          resources:
+            {{ toYaml .Values.prometheus.jmx.resources | indent 12 }}
+          volumeMounts:
+            - name: jmx-config
+              mountPath: /etc/jmx-kafka-mm
+        {{- end }}
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: 
+            - /bin/sh 
+            - -c 
+            - |
+              {{- if .Values.kafka.secretConfig }}
+              paste -d '\n' /tmp/kafka/mm-secrets.properties ./config/mirror-maker.properties  > /tmp/mm2-config.properties
+              ./bin/connect-mirror-maker.sh /tmp/mm2-config.properties
+              {{- else }}
+              ./bin/connect-mirror-maker.sh ./config/mirror-maker.properties
+              {{- end }}
+          ports:
+            {{- if .Values.jmx.enabled }}
+            - containerPort: {{ .Values.jmx.port }}
+              name: metrics
+            {{- end }}
+          env:
+            - name: KAFKA_HEAP_OPTS
+              value: "{{ .Values.kafka.heapOptions }}"
+            {{- if .Values.jmx.port }}
+            - name: JMX_PORT
+              value: "{{ .Values.jmx.port }}"
+            {{- end }}
+            {{- with .Values.extraEnv -}}
+            {{ toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: mm-config
+              mountPath: /opt/kafka/config/mirror-maker.properties
+              subPath: mirror-maker.properties
+            {{- if .Values.kafka.secretConfig }}
+            - mountPath: /tmp/kafka/mm-secrets.properties
+              name: mm-secret-config
+              subPath: mm-secrets.properties
+              readOnly: true
+            {{- end }}
+            {{- with .Values.volumeMounts -}}
+            {{ toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if .Values.jmx.enabled }}
+        - name: jmx-config
+          configMap:
+            name: {{ template "kafka-mirrormaker.fullname" . }}-jmx-configmap
+        {{- end }}
+        - name: mm-config
+          configMap:
+            name: {{ template "kafka-mirrormaker.fullname" . }}-configmap
+        {{- if .Values.kafka.secretConfig }}
+        - name: mm-secret-config
+          secret:
+            secretName: {{ template "kafka-mirrormaker.fullname" . }}-secret-config
+        {{- end }}
+        {{- with .Values.volumes -}}
+        {{ toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,17 @@
+{{- if .Values.jmx.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kafka-mirrormaker.fullname" . }}-jmx-metrics
+  labels:
+    {{- include "kafka-mirrormaker.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.jmx.port }}
+      targetPort: metrics
+      protocol: TCP
+      name: http-metrics
+  selector:
+    {{- include "kafka-mirrormaker.selectorLabels" . | nindent 4 }}
+{{- end }}

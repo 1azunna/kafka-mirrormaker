@@ -1,0 +1,13 @@
+{{- if (and .Values.jmx.enabled .Values.prometheus.serviceMonitor.enabled) }}
+kind: ServiceMonitor
+apiVersion: monitoring.coreos.com/v1
+metadata:
+  name: {{ include "kafka-mirrormaker.fullname" . }}-monitor
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "kafka-mirrormaker.fullname" . }}-jmx-metrics
+  endpoints:
+    - port: http-metrics
+      interval: 60s
+{{- end }}
