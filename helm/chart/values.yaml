@@ -46,6 +46,7 @@ kafka:
     refresh.topics.enabled: true
     sync.topic.configs.enabled: false
     sync.topic.acls.enabled: false
+    sync.group.offsets.enabled: true
     refresh.topics.interval.seconds: 60
     topics.exclude: ".*\\.internal,.*-internal,heartbeats,mirrormaker-2.*,mm2-.*"
 
